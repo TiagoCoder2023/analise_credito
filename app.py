@@ -1,6 +1,11 @@
+import os
 import joblib
 import pandas as pd
 import streamlit as st
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
 DATA_PATH = "clientes.csv"
 MODEL_PATH = "model.joblib"
 
@@ -12,7 +17,33 @@ def load_data() -> pd.DataFrame:
 
 @st.cache_resource
 def load_model():
+    if not os.path.exists(MODEL_PATH):
+        train_and_save_model()
     return joblib.load(MODEL_PATH)
+
+
+def train_and_save_model() -> None:
+    df = load_data()
+    target_col = "score_credito"
+    id_col = "id_cliente"
+    categorical_cols = ["profissao", "mix_credito", "comportamento_pagamento"]
+
+    x = df.drop(columns=[target_col, id_col])
+    y = df[target_col]
+
+    numeric_cols = [c for c in x.columns if c not in categorical_cols]
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_cols),
+            ("num", "passthrough", numeric_cols),
+        ]
+    )
+    model = RandomForestClassifier(random_state=42, n_estimators=200)
+    pipeline = Pipeline(steps=[("preprocess", preprocessor), ("model", model)])
+
+    pipeline.fit(x, y)
+    joblib.dump(pipeline, MODEL_PATH)
 
 
 def load_table(uploaded_file) -> pd.DataFrame:
